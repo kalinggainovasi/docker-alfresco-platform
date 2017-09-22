@@ -23,7 +23,8 @@ RUN set -x \
       && apt-get clean \
       && rm -rf /var/lib/apt/lists/*
 
-ARG ALF_VERSION
+ENV ALF_VERSION=5.2.f \
+    ALF_SHARE_SERVICE=5.2.e
 
 ## ALFRESCO.WAR
 RUN set -x && \
@@ -33,7 +34,6 @@ RUN set -x && \
     unzip -q alfresco-platform-${ALF_VERSION}.war -d webapps/alfresco && \
     rm alfresco-platform-${ALF_VERSION}.war
 
-
 ## JDBC - POSTGRESQL
 ENV PG_LIB_VERSION=9.2-1002.jdbc4
 RUN set -x && \
@@ -41,16 +41,16 @@ RUN set -x && \
       ${NEXUS}/postgresql/postgresql/${PG_LIB_VERSION}/postgresql-${PG_LIB_VERSION}.jar \
       -o lib/postgresql-${PG_LIB_VERSION}.jar
 
-ARG ALF_SHARE_SERVICE
-
 ## AMP - ALFRESCO SHARE SERVICE
 RUN set -x && \
     curl --silent --location \
       ${NEXUS}/org/alfresco/alfresco-share-services/${ALF_SHARE_SERVICE}/alfresco-share-services-${ALF_SHARE_SERVICE}.amp \
-      -o /root/amp/alfresco-share-services-${ALF_SHARE_SERVICE}.amp
+      -o /root/amp/alfresco-share-services-${ALF_SHARE_SERVICE}.amp && \
+    java -jar /root/alfresco-mmt.jar install /root/amp/ webapps/alfresco -nobackup -directory && \
+    rm /root/amp/alfresco-share-services-${ALF_SHARE_SERVICE}.amp
 
 RUN set -x && \
-    sed -i 's|^log4j.appender.File.File=.*$|log4j.appender.File.File=/usr/local/tomcat/logs/alfresco.log|' webapps/alfresco/WEB-INF/classes/log4j.properties && \
+    sed -i 's/^log4j.rootLogger.*/log4j.rootLogger=error, Console/' webapps/alfresco/WEB-INF/classes/log4j.properties && \
     mkdir -p  shared/classes/alfresco/extension \
               shared/classes/alfresco/messages \
               shared/lib \
@@ -60,11 +60,16 @@ RUN set -x && \
               webapps/manager \
               webapps/host-manager
 
+
+
 COPY assets/catalina.properties conf/catalina.properties
 COPY assets/server.xml conf/server.xml
+COPY assets/logging.properties conf/logging.properties
 COPY assets/web.xml webapps/alfresco/WEB-INF/web.xml
-COPY assets/alfresco-global.properties webapps/alfresco/classes/alfresco-global.properties
+COPY assets/alfresco-global.properties webapps/alfresco/WEB-INF/classes/alfresco-global.properties
 
+ENV JAVA_OPTS " -XX:-DisableExplicitGC -Djava.security.egd=file:/dev/./urandom -Djava.awt.headless=true -Dfile.encoding=UTF-8 "
 
+WORKDIR /root
 
 VOLUME "/opt/alf_data/"
